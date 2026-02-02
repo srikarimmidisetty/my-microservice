@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-microservice
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-microservice
+  template:
+    metadata:
+      labels:
+        app: my-microservice
+    spec:
+      imagePullSecrets:
+        - name: gar-secret
+      containers:
+        - name: my-microservice
+          image: us-central1-docker.pkg.dev/srikarcool1/my-microservice-repo/my-microservice:latest
+          ports:
+            - containerPort: 8080
+
