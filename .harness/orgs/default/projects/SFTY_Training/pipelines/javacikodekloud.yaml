@@ -1,0 +1,142 @@
+pipeline:
+  projectIdentifier: SFTY_Training
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: SrikarCIgithubconnector
+        repoName: my-microservice
+        build: <+input>
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              size: large
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Build Application
+                  identifier: Build_Application
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "Starting build..."
+                        mvn clean compile
+                        echo "✅ Build successful"
+    - stage:
+        name: Package
+        identifier: Package
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              size: large
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Test
+                  identifier: Test
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "Running tests..."
+                      mvn test
+                      echo " Tests completed"
+              - step:
+                  type: Run
+                  name: Create JAR
+                  identifier: create_jar
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Packaging application..."
+                      mvn package -DskipTests
+
+                      # Better JAR check
+                      if ls target/*.jar 1>/dev/null 2>&1; then
+                        echo "✅ JAR created successfully"
+                        echo "JAR files:"
+                        ls -lh target/*.jar
+                      else
+                        echo "❌ No JAR files found in target/"
+                        echo "Contents of target/:"
+                        ls -la target/ || true
+                        exit 1
+                      fi
+              - step:
+                  type: BuildAndPushGAR
+                  name: BuildAndPushGAR_1
+                  identifier: BuildAndPushGAR_1
+                  spec:
+                    connectorRef: SrikarGCPConnector
+                    host: us-central1-docker.pkg.dev
+                    projectID: srikarcool1
+                    imageName: my-microservice-repo/srikar
+                    tags:
+                      - latest
+    - stage:
+        name: CD
+        identifier: CD
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: mymicroservice
+          environment:
+            environmentRef: devsrikar
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: gkedev
+          execution:
+            steps:
+              - step:
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  type: K8sRollingDeploy
+                  timeout: 3m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  name: Rollback Rollout Deployment
+                  identifier: rollbackRolloutDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+  identifier: javacikodekloud
+  name: java-ci-kodekloud
